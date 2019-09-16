@@ -20,6 +20,9 @@ void prtIP(ULONG ulHostIP) {
 
 	std::cout << ip1 << "." << ip2 << "." << ip3 << "." << ip4 << std::endl;
 }
+/*
+将整数类型ip地址转换为点分十进制并输出
+*/
 void getIPv4(ULONG ulHostIP, ULONG* retIP1, ULONG* retIP2, ULONG* retIP3, ULONG* retIP4) {
 	ULONG ip1 = ulHostIP, ip2 = ulHostIP, ip3 = ulHostIP, ip4 = ulHostIP;
 
@@ -31,15 +34,25 @@ void getIPv4(ULONG ulHostIP, ULONG* retIP1, ULONG* retIP2, ULONG* retIP3, ULONG*
 
 	std::cout << *retIP1 << "." << *retIP2 << "." << *retIP3 << "." << *retIP4 << std::endl;
 }
+/*
+遍历ip表的前dwSize项，打印信息
+*/
 void searchIPTable(ULONG dwSize, MIB_IPADDRTABLE* pIPAddrTable) {
 	for (int i = 0; i < dwSize; i++)
 	{
 		ULONG ip1 = 0, ip2 = 0, ip3 = 0, ip4 = 0;
+		
 		ULONG ulHostIP = ntohl(pIPAddrTable->table[i].dwAddr);
 		MIB_IPADDRROW CorrentIpTable = pIPAddrTable->table[i];
+		ULONG ip[4] = { 0 };
 		std::cout << "\n第" << i << "个IP地址为：";
-		getIPv4(ulHostIP, &ip1, &ip2, &ip3, &ip4);
-		std::cout << ulHostIP << std::endl;
+		getIPv4(ulHostIP, ip, ip+1, ip+2, ip+3);
+		//std::cout << ulHostIP << std::endl;
+		ULONG mask[4] = {0};
+		ULONG msk = ntohl(pIPAddrTable->table[i].dwMask);
+		std::cout <<"子网掩码为：";
+		getIPv4(msk, mask, mask + 1, mask + 2, mask + 3);
+		std::cout << "wType为 "<< CorrentIpTable.wType;
 	}
 }
 
@@ -53,20 +66,45 @@ int main()
 		pIPAddrTable = (MIB_IPADDRTABLE*)malloc(sizeof(MIB_IPADDRTABLE)*dwSize);
 	}
 	if ((dwRetVel = GetIpAddrTable(pIPAddrTable, &dwSize, 0)) == NO_ERROR) {
-		//ULONG ulHostIP = ntohl(pIPAddrTable->table[2].dwAddr);
-		ULONG ip1 = 0, ip2 = 0, ip3 = 0, ip4 = 0;
-		DWORD d = pIPAddrTable->dwNumEntries;
-		std::cout << "\nIPTable中dwNumEntries为：" << d << "\n";
+		ULONG ulHostIP = ntohl(pIPAddrTable->table[0].dwAddr);
+
+		std::cout << "\nIPTable中dwNumEntries为：" << pIPAddrTable->dwNumEntries << "\n";
 		std::cout << "\nIPTable中共有" << dwSize << "条数据\n";
-		
-		//std::cout << ulHostIP << std::endl;
-		//printf();
-		//prtIP(ulHostIP);
-		
-		
-		//std::cout << ip1 << "-" << ip2 << "-" << ip3 << "-" << ip4 << std::endl;
+		ULONG mask = ntohl(pIPAddrTable->table[0].dwMask);
+		std::cout<<(~mask)<<"\n";
+		for (ULONG i = 1; i < (~mask); i++)
+		{
+			static ULONG uNo = 0;
+			HRESULT hr;
+			IPAddr ipaddr;
+			ULONG pulMac[2];
+			ULONG ulLen;
+			ipaddr = htonl(i+ (ulHostIP & mask));//转换为网络字节序
+			memset(pulMac, 0xff, sizeof(pulMac));
+			
+			//ULONG ip[4] = { 0 };
+			//getIPv4(i + (ulHostIP & mask), ip, ip + 1, ip + 2, ip + 3);
+
+			ulLen = 6;
+			hr = SendARP(ipaddr, 0, pulMac, &ulLen);
+			if (ulLen == 6)
+			{
+				uNo++;
+				PBYTE pbHexMac = (PBYTE)pulMac;
+				unsigned char* strIpAddr = (unsigned char*)(&ipaddr);//解析时将按照
+				printf("%d:MAC Address %02X:%02X:%02X:%02X:%02X:%02X IP Address %d.%d.%d.%d\n"
+					,uNo, pbHexMac[0], pbHexMac[1], pbHexMac[2], pbHexMac[3], pbHexMac[4], pbHexMac[5],
+					strIpAddr[0], strIpAddr[1], strIpAddr[2], strIpAddr[3]);
+			}
+		}
+		//searchIPTable(d, pIPAddrTable);
 	}
-	
+	else
+	{
+		std::cout<<"Call to GetIpAddrTable failed";
+	}
+	std::cout << "OVER!";
+	free(pIPAddrTable);
 }
 
 
